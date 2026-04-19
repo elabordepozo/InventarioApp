@@ -1,51 +1,93 @@
+# Compila el APK en GitHub (Ubuntu). Sube el .apk como artefacto descargable.
+# Uso: pestaña Actions -> "Android APK" -> Run workflow (o push a main).
+
 name: Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main, master]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/25.2.9519653
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Liberar espacio en disco
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          df -h
+
+      - name: Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
-      - name: Install system dependencies
+      - name: Dependencias del sistema (Buildozer / Android NDK)
         run: |
-          sudo apt update
-          sudo apt install -y \
-            build-essential \
-            git \
-            zip \
-            unzip \
-            openjdk-17-jdk \
-            libffi-dev \
-            libssl-dev \
-            libsqlite3-dev \
-            zlib1g-dev
+          sudo apt-get update -qq
+          sudo apt-get install -yq \
+            git zip unzip openjdk-17-jdk autoconf libtool pkg-config \
+            zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev \
+            liblzma-dev python3-dev
 
-      - name: Install Buildozer
+      - name: Instalar Buildozer
         run: |
-          pip install --upgrade pip
-          pip install buildozer cython
+          python -m pip install --upgrade pip
+          pip install "setuptools<81" wheel cython buildozer
 
-      - name: Clean previous builds
-        run: rm -rf .buildozer
+      # --- FIX: instalar Android SDK + build-tools ANTES de buildozer ---
+      # Esto garantiza que 'aidl' esté disponible en el PATH.
+      - name: Instalar Android SDK y build-tools
+        run: |
+          # Descargar cmdline-tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $HOME/android-sdk-setup
+          mkdir -p $HOME/.buildozer/android/platform/android-sdk/cmdline-tools
+          mv $HOME/android-sdk-setup/cmdline-tools $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest
 
-      - name: Build APK
+          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+
+          # Aceptar licencias e instalar build-tools y platform-tools
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses > /dev/null 2>&1 || true
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+            "build-tools;34.0.0" \
+            "platforms;android-33" \
+            "platform-tools"
+
+          # Verificar que aidl existe
+          find $ANDROID_SDK_ROOT/build-tools -name "aidl" | head -5
+
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/build-tools/34.0.0" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+
+      - name: Cache .buildozer (solo carpeta del proyecto)
+        uses: actions/cache@v4
+        with:
+          path: .buildozer
+          # v5: fuerza cache limpio (evita SDK incompleto con aidl faltante)
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'main.py') }}-v5
+          restore-keys: |
+            buildozer-${{ runner.os }}-
+
+      - name: Compilar APK (debug)
+        env:
+          BUILDOZER_WARN_ON_ROOT: "0"
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
         run: buildozer android debug
 
-      - name: Upload APK
+      - name: Subir APK
         uses: actions/upload-artifact@v4
         with:
-          name: inventario-app
+          name: inventario-debug-apk
           path: bin/*.apk
+          if-no-files-found: error
