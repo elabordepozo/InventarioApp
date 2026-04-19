@@ -5,7 +5,9 @@ package.domain = org.inventario.local
 source.dir = .
 source.include_exts = py
 version = 0.1.0
-requirements = python3,kivy,Pillow,android,pyzbar
+# Sin pyzbar: su receta en python-for-android falla a menudo en CI (p4a create).
+# En el APK el escaneo puede ser manual; en Pydroid sigue valiendo zxing-cpp / pyzbar por pip.
+requirements = python3,kivy,Pillow,android
 orientation = portrait
 fullscreen = 0
 # Permisos: camara (escaneo), red (sync WiFi)
