@@ -1,27 +1,29 @@
 [app]
-title = Inventario
-package.name = inventarioapp
-package.domain = org.inventario.local
-source.dir = .
-source.include_exts = py
-version = 0.1.0
-# Sin pyzbar: su receta en python-for-android falla a menudo en CI (p4a create).
-# En el APK el escaneo puede ser manual; en Pydroid sigue valiendo zxing-cpp / pyzbar por pip.
-requirements = python3,kivy,Pillow,android
-orientation = portrait
-fullscreen = 0
-# Permisos: camara (escaneo), red (sync WiFi)
-android.permissions = INTERNET,CAMERA
 
-# --- Android / SDK (evita "Aidl not found" y licencias en CI) ---
-android.accept_sdk_license = True
+title = InventarioApp
+package.name = inventarioapp
+package.domain = org.test
+
+source.dir = .
+source.include_exts = py,png,jpg,kv,atlas
+
+version = 0.1
+
+requirements = python3==3.10,kivy,pillow,zbarlight
+
+orientation = portrait
+
+fullscreen = 0
+
+android.permissions = CAMERA
+android.features = android.hardware.camera
+
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
-android.ndk_api = 21
-# Una sola arquitectura acelera GitHub Actions (quita arm64-v8a y deja solo armeabi-v7a si prefieres 32 bits)
-android.archs = arm64-v8a
 
-[buildozer]
+android.archs = armeabi-v7a
+
 log_level = 2
-warn_on_root = 1
+
+warn_on_root = 0
