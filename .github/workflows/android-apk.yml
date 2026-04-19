@@ -1,3 +1,6 @@
+# Copia este archivo a: .github/workflows/android-apk.yml
+# (en Windows ejecuta copiar_ci_github.bat en la raiz del proyecto)
+#
 # Compila el APK en GitHub (Ubuntu). Sube el .apk como artefacto descargable.
 # Uso: pestaña Actions -> "Android APK" -> Run workflow (o push a main).
 
