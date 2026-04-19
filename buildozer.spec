@@ -1,29 +1,28 @@
 [app]
-
-title = InventarioApp
+title = Inventario
 package.name = inventarioapp
-package.domain = org.test
-
+package.domain = org.inventario.local
 source.dir = .
-source.include_exts = py,png,jpg,kv,atlas
-
-version = 0.1
-
-requirements = python3==3.10,kivy,pillow,zbarlight
-
+source.include_exts = py
+version = 0.1.0
+# zxing-cpp: decodificador QR/barras sin dependencias nativas problemáticas.
+# Pillow: necesario para convertir textura de cámara antes de decodificar.
+requirements = python3,kivy,Pillow,android,zxing-cpp
 orientation = portrait
-
 fullscreen = 0
 
-android.permissions = CAMERA
-android.features = android.hardware.camera
+# Permisos: CAMERA con solicitud en tiempo de ejecución (Android 6+)
+android.permissions = INTERNET,CAMERA
 
+# --- Android / SDK (evita "Aidl not found" y licencias en CI) ---
+android.accept_sdk_license = True
 android.api = 33
 android.minapi = 21
 android.ndk = 25b
+android.ndk_api = 21
+# Una sola arquitectura acelera GitHub Actions (quita arm64-v8a y deja solo armeabi-v7a si prefieres 32 bits)
+android.archs = arm64-v8a
 
-android.archs = armeabi-v7a
-
+[buildozer]
 log_level = 2
-
-warn_on_root = 0
+warn_on_root = 1
