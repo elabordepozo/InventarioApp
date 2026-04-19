@@ -43,39 +43,48 @@ jobs:
           python -m pip install --upgrade pip
           pip install "setuptools<81" wheel cython buildozer
 
-      # --- FIX: instalar Android SDK + build-tools ANTES de buildozer ---
-      # Esto garantiza que 'aidl' esté disponible en el PATH.
-      - name: Instalar Android SDK y build-tools
+      - name: Instalar Android SDK completo
         run: |
+          SDK_ROOT="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$SDK_ROOT/cmdline-tools"
+
           # Descargar cmdline-tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d $HOME/android-sdk-setup
-          mkdir -p $HOME/.buildozer/android/platform/android-sdk/cmdline-tools
-          mv $HOME/android-sdk-setup/cmdline-tools $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest
+          unzip -q cmdline-tools.zip -d /tmp/cmdline-tools-tmp
+          mv /tmp/cmdline-tools-tmp/cmdline-tools "$SDK_ROOT/cmdline-tools/latest"
 
-          export ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          export ANDROID_SDK_ROOT="$SDK_ROOT"
+          export PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
 
-          # Aceptar licencias e instalar build-tools y platform-tools
-          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses > /dev/null 2>&1 || true
-          sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+          # Aceptar licencias
+          yes | sdkmanager --sdk_root="$SDK_ROOT" --licenses > /dev/null 2>&1 || true
+
+          # Instalar herramientas necesarias
+          sdkmanager --sdk_root="$SDK_ROOT" \
+            "platform-tools" \
             "build-tools;34.0.0" \
-            "platforms;android-33" \
-            "platform-tools"
+            "platforms;android-33"
 
-          # Verificar que aidl existe
-          find $ANDROID_SDK_ROOT/build-tools -name "aidl" | head -5
+          # Crear el symlink tools/bin/sdkmanager que Buildozer busca
+          mkdir -p "$SDK_ROOT/tools/bin"
+          ln -sf "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"
+          ln -sf "$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"  "$SDK_ROOT/tools/bin/avdmanager"
 
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-          echo "$ANDROID_SDK_ROOT/build-tools/34.0.0" >> $GITHUB_PATH
-          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          # Verificar aidl
+          echo "--- aidl encontrado en: ---"
+          find "$SDK_ROOT/build-tools" -name "aidl"
 
-      - name: Cache .buildozer (solo carpeta del proyecto)
+          # Exportar variables para los pasos siguientes
+          echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> $GITHUB_ENV
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDK_ROOT/build-tools/34.0.0"       >> $GITHUB_PATH
+          echo "$SDK_ROOT/platform-tools"            >> $GITHUB_PATH
+
+      - name: Cache .buildozer
         uses: actions/cache@v4
         with:
           path: .buildozer
-          # v5: fuerza cache limpio (evita SDK incompleto con aidl faltante)
-          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'main.py') }}-v5
+          key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec', 'main.py') }}-v6
           restore-keys: |
             buildozer-${{ runner.os }}-
 
