@@ -224,48 +224,79 @@ def _detener_cam(cam):
             pass
 
 
+# ── Permiso de cámara en tiempo de ejecución (Android 6+) ────────────────────
+def _pedir_permiso_camara(callback_si, callback_no=None):
+    """
+    En Android solicita el permiso CAMERA en tiempo de ejecución.
+    En escritorio llama directamente a callback_si().
+    """
+    try:
+        from android.permissions import request_permissions, Permission, check_permission
+        if check_permission(Permission.CAMERA):
+            callback_si()
+        else:
+            def _on_perms(perms, grants):
+                if grants and all(grants):
+                    callback_si()
+                else:
+                    if callback_no:
+                        callback_no()
+                    else:
+                        alerta("Permiso denegado",
+                               "La app necesita permiso de camara para escanear.\n"
+                               "Ve a Ajustes > Aplicaciones > Inventario > Permisos.")
+            request_permissions([Permission.CAMERA], _on_perms)
+    except ImportError:
+        # No estamos en Android (escritorio/Pydroid sin módulo android)
+        callback_si()
+
+
 def abrir_escaneo_camara(callback_codigo, titulo="Escanear codigo"):
     """
-    Abre la camara; al pulsar Capturar se decodifica y se llama callback_codigo(str).
+    Pide permiso de cámara (Android) y luego abre el visor.
+    Al pulsar Capturar se decodifica y se llama callback_codigo(str).
     """
-    ok, err = escaneo_puede_funcionar()
-    if not ok:
-        alerta("Escaneo", err)
-        return
-    from kivy.uix.camera import Camera
-
-    cam_holder = [None]
-    cam_layout = BoxLayout(orientation="vertical", spacing=dp(6), padding=dp(6))
-    cam = Camera(play=True, resolution=(640, 480))
-    cam_holder[0] = cam
-    cam_layout.add_widget(cam)
-
-    cam_pop = Popup(title=titulo, content=cam_layout, size_hint=(0.95, 0.78),
-                    background_color=CARD, title_color=ACCENT,
-                    separator_color=ACCENT)
-
-    def capturar(_):
-        c = cam_holder[0]
-        if not c or not c.texture:
-            alerta("Camara", "Espera un momento a que arranque la imagen.")
+    def _abrir():
+        ok, err = escaneo_puede_funcionar()
+        if not ok:
+            alerta("Escaneo", err)
             return
-        try:
-            cod = decodificar_textura_camera(c.texture)
-            if cod:
-                cam_pop.dismiss()
-                c.play = False
-                callback_codigo(cod)
-            else:
-                alerta("Sin resultado",
-                       "No se leyo ningun codigo.\n"
-                       "Mejora la luz, acerca el codigo. Si falta motor: "
-                       "Pip -> zxing-cpp y Pillow (sin OpenCV).")
-        except Exception as e:
-            alerta("Error", str(e))
+        from kivy.uix.camera import Camera
 
-    cam_layout.add_widget(mk_btn("Capturar", capturar, bg=SUCCESS, height=dp(48)))
-    cam_pop.bind(on_dismiss=lambda *_: _detener_cam(cam_holder[0]))
-    cam_pop.open()
+        cam_holder = [None]
+        cam_layout = BoxLayout(orientation="vertical", spacing=dp(6), padding=dp(6))
+        cam = Camera(play=True, resolution=(640, 480))
+        cam_holder[0] = cam
+        cam_layout.add_widget(cam)
+
+        cam_pop = Popup(title=titulo, content=cam_layout, size_hint=(0.95, 0.78),
+                        background_color=CARD, title_color=ACCENT,
+                        separator_color=ACCENT)
+
+        def capturar(_):
+            c = cam_holder[0]
+            if not c or not c.texture:
+                alerta("Camara", "Espera un momento a que arranque la imagen.")
+                return
+            try:
+                cod = decodificar_textura_camera(c.texture)
+                if cod:
+                    cam_pop.dismiss()
+                    c.play = False
+                    callback_codigo(cod)
+                else:
+                    alerta("Sin resultado",
+                           "No se leyo ningun codigo.\n"
+                           "Mejora la luz, acerca el codigo.")
+            except Exception as e:
+                alerta("Error", str(e))
+
+        cam_layout.add_widget(mk_btn("Capturar", capturar, bg=SUCCESS, height=dp(48)))
+        cam_pop.bind(on_dismiss=lambda *_: _detener_cam(cam_holder[0]))
+        cam_pop.open()
+
+    # Primero pedir permiso, luego abrir
+    _pedir_permiso_camara(_abrir)
 
 
 # ── Pantalla base ──────────────────────────────────────────────────────────────
